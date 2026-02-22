@@ -2,87 +2,99 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# إعدادات واجهة النظام
-st.set_page_config(page_title="نظام المعاينة الجمركية", layout="wide", page_icon="🏗️")
+# إعداد الصفحة
+st.set_page_config(page_title="مكتب أبو محمد للتخليص", layout="wide")
 
-st.title("📋 نظام أتمتة استمارة المعاينة الجمركية")
-st.write("يرجى تعبئة كافة الحقول الفنية بدقة ليتم إرسالها لمختص الثمن")
+# رابط الجدول الخاص بك (للقراءة)
+SHEET_ID = "1D5mzjR7lFqs6t4C8V0dWVdFki7bEXKubcTVchJe5ohM"
+csv_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
 
-# إنشاء نموذج الإدخال
-with st.form("detailed_customs_form", clear_on_submit=True):
+# --- وظيفة جلب البيانات للتعبئة الآلية ---
+@st.cache_data(ttl=60) # تحديث الذاكرة كل دقيقة
+def get_drivers_data():
+    try:
+        df = pd.read_csv(csv_url)
+        # الاحتفاظ بآخر بيانات مسجلة لكل سائق
+        drivers_db = df.drop_duplicates(subset=['السائق'], keep='last')
+        return drivers_db
+    except:
+        return pd.DataFrame()
+
+drivers_df = get_drivers_data()
+
+# --- واجهة البرنامج ---
+# إضافة الصورة في الأعلى
+st.image("https://raw.githubusercontent.com/yusuf23000-ui/app.py-app/main/7569.jpg", use_column_width=True)
+st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏗️ نظام مكتب أبو محمد للتخليص</h1>", unsafe_allow_html=True)
+st.divider()
+
+tab1, tab2 = st.tabs(["📄 إصدار فاتورة ذكية", "📊 التقارير العامة"])
+
+with tab1:
+    st.subheader("📝 إدخال معاملة جديدة")
     
-    # القسم الأول: بيانات عامة والشحنة
-    st.subheader("📌 بيانات المستورد والشحنة")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        importer = st.text_input("اسم المستورد")
-        driver_name = st.text_input("اسم السائق")
-    with c2:
-        statement_no = st.text_input("رقم البيان")
-        seal_no = st.text_input("رقم السيل (Seal No)")
-    with c3:
-        report_date = st.date_input("التاريخ", datetime.now())
-        goods_type = st.text_input("نوع البضاعة عامة")
+    # ميزة التعبئة الآلية: البحث عن السائق
+    search_driver = st.selectbox("ابحث عن سائق مسجل (أو اختر 'جديد')", ["جديد"] + list(drivers_df['السائق'].unique()) if not drivers_df.empty else ["جديد"])
+    
+    # تحديد البيانات الافتراضية إذا كان السائق معروفاً
+    default_plate = ""
+    default_chassis = ""
+    if search_driver != "جديد":
+        driver_info = drivers_df[drivers_df['السائق'] == search_driver].iloc[0]
+        default_plate = driver_info['اللوحة']
+        default_chassis = driver_info['القعادة'] if 'القعادة' in driver_info else ""
 
-    st.divider()
+    with st.form("invoice_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            importer = st.text_input("اسم المستورد")
+            driver_name = st.text_input("اسم السائق", value=search_driver if search_driver != "جديد" else "")
+            plate = st.text_input("رقم اللوحة", value=default_plate)
+            chassis = st.text_input("رقم القعادة", value=default_chassis)
+        with col2:
+            manifest_no = st.text_input("رقم البيان")
+            bags = st.number_input("عدد الأكياس", min_value=0, step=1)
+            fees = st.number_input("الرسوم (ريال)", min_value=0.0)
+            date_val = st.date_input("التاريخ", datetime.now())
+        
+        submit = st.form_submit_button("✨ توليد الفاتورة للطباعة")
 
-    # القسم الثاني: تفاصيل الإسمنت والإنتاج
-    st.subheader("🏗️ تفاصيل الإسمنت والكميات")
-    c4, c5, c6 = st.columns(3)
-    with c4:
-        cement_type = st.text_input("نوع الإسمنت")
-    with c5:
-        bags_count = st.number_input("عدد الأكياس", min_value=0, step=1)
-    with c6:
-        company_origin = st.text_input("إنتاج شركة /")
-
-    st.divider()
-
-    # القسم الثالث: بيانات الوسيلة (السيارة)
-    st.subheader("🚛 بيانات وسيلة النقل")
-    c7, c8 = st.columns(2)
-    with c7:
-        plate_no = st.text_input("رقم اللوحة")
-    with c8:
-        chassis_no = st.text_input("رقم القعادة")
-
-    st.divider()
-
-    # القسم الرابع: المصادقة والتوقيع (رقمي)
-    st.subheader("✍️ المصادقة والتواقيع الرسمية")
-    c9, c10 = st.columns(2)
-    with c9:
-        inspector_confirm = st.checkbox("توقيع ومصادقة المعاين (إقرار بصحة البيانات)")
-        inspector_name = st.text_input("اسم المعاين المسؤول")
-    with c10:
-        officer_confirm = st.checkbox("توقيع ومصادقة الضابطة الجمركية")
-        officer_name = st.text_input("اسم ضابط النوبة")
-
-    # زر الإرسال النهائي
-    submit_to_specialist = st.form_submit_button("🚀 إرسال البيانات آلياً إلى مختص الثمن")
-
-# منطق المعالجة بعد الضغط على الزر
-if submit_to_specialist:
-    if inspector_confirm and officer_confirm:
-        if plate_no and chassis_no and importer:
-            # تجميع البيانات لعرضها
-            st.success("✅ تمت المصادقة بنجاح. جاري إرسال التقرير الشامل لمختص الثمن...")
+    if submit:
+        if importer and driver_name:
+            # تصميم الفاتورة مع الشعار الجديد
+            st.markdown(f"""
+            <div style="direction: rtl; border: 5px solid #1E3A8A; padding: 30px; border-radius: 20px; background-color: white; color: black; font-family: 'Arial';">
+                <div style="text-align: center;">
+                    <img src="https://raw.githubusercontent.com/yusuf23000-ui/app.py-app/main/7569.jpg" width="300">
+                    <h2 style="color: #1E3A8A; margin-top: 10px;">فاتورة تخليص جمركي</h2>
+                </div>
+                <hr style="border: 2px solid #1E3A8A;">
+                <div style="display: flex; justify-content: space-between; font-size: 18px;">
+                    <p><b>التاريخ:</b> {date_val}</p>
+                    <p><b>رقم البيان:</b> {manifest_no}</p>
+                </div>
+                <table style="width: 100%; font-size: 19px; border-collapse: collapse; margin-top: 15px;">
+                    <tr style="background-color: #f8f9fa;"><td style="padding: 10px; border: 1px solid #ddd;"><b>المستورد:</b></td><td style="padding: 10px; border: 1px solid #ddd;">{importer}</td></tr>
+                    <tr><td style="padding: 10px; border: 1px solid #ddd;"><b>السائق:</b></td><td style="padding: 10px; border: 1px solid #ddd;">{driver_name}</td></tr>
+                    <tr style="background-color: #f8f9fa;"><td style="padding: 10px; border: 1px solid #ddd;"><b>اللوحة / القعادة:</b></td><td style="padding: 10px; border: 1px solid #ddd;">{plate} / {chassis}</td></tr>
+                    <tr><td style="padding: 10px; border: 1px solid #ddd;"><b>الكمية:</b></td><td style="padding: 10px; border: 1px solid #ddd;">{bags:,} كيس</td></tr>
+                </table>
+                <div style="margin-top: 25px; padding: 20px; background-color: #E0E7FF; border-radius: 15px; text-align: center;">
+                    <h2 style="margin: 0; color: #1E3A8A;">إجمالي الرسوم: {fees:,.2f} ريال</h2>
+                </div>
+                <p style="text-align: center; margin-top: 20px; font-size: 12px; color: #777;">صادر عن النظام الإلكتروني لمكتب أبو محمد</p>
+            </div>
+            """, unsafe_allow_html=True)
             
-            summary_data = {
-                "المستورد": importer,
-                "السائق": driver_name,
-                "اللوحة": plate_no,
-                "القعادة": chassis_no,
-                "نوع الإسمنت": cement_type,
-                "الإنتاج": company_origin,
-                "عدد الأكياس": bags_count,
-                "رقم السيل": seal_no,
-                "المعاينة": "تمت المصادقة",
-                "الضابطة": "تمت المصادقة"
-            }
-            st.table(pd.DataFrame([summary_data]))
-        else:
-            st.error("⚠️ يرجى التأكد من تعبئة الحقول الأساسية (اللوحة، القعادة، المستورد)")
-    else:
-        st.warning("🚫 لا يمكن الإرسال لمختص الثمن بدون مصادقة 'المعاين' و 'الضابطة الجمركية' معاً.")
-            
+            st.success("✅ الفاتورة جاهزة. خذ لقطة شاشة.")
+            # سطر البيانات المطور للنسخ
+            st.write("📋 سطر البيانات المحدث (لصقه في الإكسل):")
+            row_data = f"{date_val}, {importer}, {driver_name}, {plate}, {chassis}, {manifest_no}, {bags}, {fees}"
+            st.code(row_data, language="text")
+
+with tab2:
+    st.subheader("📊 ملخص الحسابات والبيانات المسجلة")
+    if st.button("🔄 تحديث"):
+        st.cache_data.clear()
+        df = pd.read_csv(csv_url)
+        st.dataframe(df, use_container_width=True)
