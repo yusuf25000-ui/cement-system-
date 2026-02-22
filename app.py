@@ -98,3 +98,4 @@ with tab2:
         st.cache_data.clear()
         df = pd.read_csv(csv_url)
         st.dataframe(df, use_container_width=True)
+        
